@@ -19,10 +19,11 @@ class TimestampModel(models.Model):
         abstract = True
 
 
-class UserTimingPreferences:
+class UserTimingPreferences(models.Model):
     day_start_time = models.DateTimeField()
     day_end_time = models.DateTimeField()
-    time_zone = models.CharField(validators=[validate_timezone])
+    time_zone = models.CharField(max_length=100,
+                                 validators=[validate_timezone])
 
 
 class User(TimestampModel):
@@ -37,3 +38,6 @@ class User(TimestampModel):
     timingPreferences = models.ForeignKey(UserTimingPreferences,
                                           on_delete=models.CASCADE,
                                           null=True)
+
+    def __str__(self):
+        return self.username
