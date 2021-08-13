@@ -20,6 +20,9 @@ class TimestampModel(models.Model):
 
 
 class UserTimingPreferences(models.Model):
+    id = models.UUIDField(primary_key=True,
+                          default=uuid.uuid4,
+                          editable=False)
     day_start_time = models.DateTimeField()
     day_end_time = models.DateTimeField()
     time_zone = models.CharField(max_length=100,
@@ -34,10 +37,10 @@ class User(TimestampModel):
     first_name = models.CharField(max_length=50)
     last_name = models.CharField(max_length=50)
     email = models.EmailField(max_length=254, unique=True)
-    password = models.CharField('password', max_length=128, null=True)
+    password = models.CharField('password', max_length=128, null=False)
     timingPreferences = models.ForeignKey(UserTimingPreferences,
                                           on_delete=models.CASCADE,
-                                          null=True)
+                                          null=False)
 
     def __str__(self):
         return self.username
