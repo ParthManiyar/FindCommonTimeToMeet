@@ -21,12 +21,12 @@ def check_for_required_params(params):
         raise Exception("The required duration_mins field is not present")
     duration_mins = int(duration_mins)
     if not count:
-        raise Exception("he required count field is not present")
+        raise Exception("The required count field is not present")
     count = int(count)
     return users, duration_mins, count
 
 
-def convert_to_utc(time, time_zone):
+def convert_to_ist(time, time_zone):
     time_zone = pytz.timezone(time_zone)
     naive_datetime = datetime.datetime(2010, 10, 31, time.hour, time.minute,
                                        time.second)
@@ -43,7 +43,7 @@ def get_date_string(date_object):
     return rfc3339.rfc3339(date_object)
 
 
-def convert_date_to_utc(date_string):
+def get_time_in_ist_format(date_string):
     dt = get_date_object(date_string)
     utc_datetime = dt.astimezone(pytz.timezone("Asia/Calcutta"))
     return utc_datetime.time()
@@ -56,9 +56,9 @@ def get_user_preference_list(users):
         preference_time = user_obj.timing_preferences
         time_zone = preference_time.time_zone
         start_time = preference_time.day_start_time
-        utc_start_time = convert_to_utc(start_time, time_zone)
+        utc_start_time = convert_to_ist(start_time, time_zone)
         end_time = preference_time.day_end_time
-        utc_end_time = convert_to_utc(end_time, time_zone)
+        utc_end_time = convert_to_ist(end_time, time_zone)
         user_preference_list.append((utc_start_time, utc_end_time))
     return user_preference_list
 
@@ -76,7 +76,8 @@ def common_work_time_interval(users):
 
 def get_blocked_time_interval_list(body, users):
     blocked_time_interval_list = []
-    dt = get_date_object(body[users[0]]['calendars']['primary']['busy'][0]['start'])
+    date_time_format = get_date_object(body[users[0]]['calendars']['primary']
+                                       ['busy'][0]['start'])
     for user in users:
         calendar_info = body.get(user, None)
         if not calendar_info:
@@ -84,10 +85,10 @@ def get_blocked_time_interval_list(body, users):
                             f"{user}")
         busy_list = calendar_info['calendars']['primary']['busy']
         for busy in busy_list:
-            utc_start_time = convert_date_to_utc(busy['start'])
-            utc_end_time = convert_date_to_utc(busy['end'])
+            utc_start_time = get_time_in_ist_format(busy['start'])
+            utc_end_time = get_time_in_ist_format(busy['end'])
             blocked_time_interval_list.append((utc_start_time, utc_end_time))
-    return blocked_time_interval_list, dt
+    return blocked_time_interval_list, date_time_format
 
 
 def find_clash(start_time, end_time, busy_intervals):
@@ -124,7 +125,7 @@ def convert_interval_to_date(free_interval_list, time_format):
     return slots
 
 
-def get_common_free_intervals(body, users, duration_mins):
+def get_common_free_intervals(body, users, duration_mins, count):
     start_common_interval, end_common_interval = \
         common_work_time_interval(users)
     busy_intervals, time_format = get_blocked_time_interval_list(body, users)
@@ -134,9 +135,13 @@ def get_common_free_intervals(body, users, duration_mins):
         timedelta(minutes=duration_mins)
     end_time = dt.time()
     free_interval_list = []
+    number_of_interval = 0
     while end_time <= end_common_interval:
         if not find_clash(start_time, end_time, busy_intervals):
             free_interval_list.append((start_time, end_time))
+            number_of_interval += 1
+            if number_of_interval == count:
+                break
         start_time = end_time
         dt = datetime.datetime.combine(date.today(), start_time) + \
             timedelta(minutes=duration_mins)
@@ -152,7 +157,7 @@ class FindCommonTimeToMeetAPIView(APIView):
             params = request.GET
             users, duration_mins, count = check_for_required_params(params)
             free_interval_list, time_format = \
-                get_common_free_intervals(body, users, duration_mins)
+                get_common_free_intervals(body, users, duration_mins, count)
             slots = convert_interval_to_date(free_interval_list, time_format)
             return Response(slots,
                             status=200,
