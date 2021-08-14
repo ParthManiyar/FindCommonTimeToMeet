@@ -1,4 +1,4 @@
-# findCommonTimeToMeet
+# FindCommonTimeToMeet
 To run the web application follow below steps:
 * git clone https://github.com/ParthManiyar/findCommonTimeToMeet.git
 * docker-compose up --build
