@@ -18,5 +18,9 @@ To cerate the db tables again:
 
 > python manage.py migrate
 
+# Assumptions:
+For suggested-time API
+* Assumed that body request and response will be in IST format as example given in the problem statement.
+* Calendar Information provided post request will always be valid. 
 
   
