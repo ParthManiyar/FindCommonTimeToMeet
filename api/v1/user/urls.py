@@ -3,5 +3,5 @@ from . import views
 
 urlpatterns = [
     path('', views.UserAPI.as_view()),
-    path('<str:pk>', views.UserReRetrieveUpdateDestroyAPI.as_view())
+    path('<int:pk>', views.UserRetrieveUpdateDestroyAPI.as_view())
 ]

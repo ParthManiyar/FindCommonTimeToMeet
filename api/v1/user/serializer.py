@@ -1,8 +1,8 @@
 from rest_framework import serializers
-from findCommonTimeToMeetApp.models import User
+from findCommonTimeToMeetApp.models import CustomUser
 
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
+        model = CustomUser
         fields = "__all__"
