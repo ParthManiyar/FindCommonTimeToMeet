@@ -1,5 +1,7 @@
 import datetime
 from datetime import date, timedelta
+
+from django.http import Http404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 import pytz
@@ -20,9 +22,14 @@ def check_for_required_params(params):
     if not duration_mins:
         raise Exception("The required duration_mins field is not present")
     duration_mins = int(duration_mins)
+    if 0 >= duration_mins > 86400:
+        raise Exception("The duration_mins should be "
+                        "positive integer between 0 and 86401 ")
     if not count:
         raise Exception("The required count field is not present")
     count = int(count)
+    if count < 0:
+        raise Exception("The count field only takes positive integer")
     return users, duration_mins, count
 
 
@@ -52,7 +59,11 @@ def get_time_in_ist_format(date_string):
 def get_user_preference_list(users):
     user_preference_list = []
     for user in users:
-        user_obj = CustomUser.objects.get(id=int(user))
+        try:
+            user_obj = CustomUser.objects.get(id=int(user))
+        except CustomUser.DoesNotExist:
+            raise Http404(f"No User with given id {user} found")
+
         preference_time = user_obj.timing_preferences
         time_zone = preference_time.time_zone
         start_time = preference_time.day_start_time
@@ -159,6 +170,11 @@ class FindCommonTimeToMeetAPIView(APIView):
             free_interval_list, time_format = \
                 get_common_free_intervals(body, users, duration_mins, count)
             slots = convert_interval_to_date(free_interval_list, time_format)
+            if len(slots) == 0:
+                return Response({"message": "No common time to meet "
+                                            "found for given details"},
+                                status=200,
+                                content_type="application/json")
             return Response(slots,
                             status=200,
                             content_type="application/json")
