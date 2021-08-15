@@ -175,7 +175,7 @@ class FindCommonTimeToMeetAPIView(APIView):
                                             "found for given details"},
                                 status=200,
                                 content_type="application/json")
-            return Response(slots,
+            return Response({"slots": slots},
                             status=200,
                             content_type="application/json")
         except Exception as e:
