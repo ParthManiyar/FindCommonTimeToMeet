@@ -18,6 +18,9 @@ To cerate the db tables again:
 
 > python manage.py migrate
 
+To run the unit test
+> python manage.py test
+
 # Assumptions:
 For suggested-time API
 * Assumed that body request and response will be in IST format as example given in the problem statement.
