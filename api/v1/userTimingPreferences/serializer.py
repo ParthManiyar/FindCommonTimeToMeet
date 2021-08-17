@@ -11,3 +11,4 @@ class UserTimingPreferencesSerializer(serializers.ModelSerializer):
         if data['day_start_time'] >= data['day_end_time']:
             raise serializers.ValidationError("day_start_time should "
                                               "be less than day_end_time")
+        return data
