@@ -25,5 +25,8 @@ To run the unit test
 For suggested-time API
 * Assumed that body request and response will be in IST format as example given in the problem statement.
 * Calendar Information provided post request will always be valid. 
+* Calendar Information of the same day only .
+* day_start_time will be less than day_end_time.
+* slots provided will be of the same day
 
   
