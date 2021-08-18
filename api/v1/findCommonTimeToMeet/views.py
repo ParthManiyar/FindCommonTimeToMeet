@@ -1,6 +1,5 @@
 import datetime
-from datetime import date, timedelta
-
+from datetime import timedelta
 from django.http import Http404
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,8 +16,6 @@ def check_for_required_params(params):
     if not users:
         raise Exception("The required users field is not present")
     users = users.split(',')
-    if len(users) != 2:
-        raise Exception("Requires exactly two user id")
     if not duration_mins:
         raise Exception("The required duration_mins field is not present")
     duration_mins = int(duration_mins)
@@ -33,13 +30,12 @@ def check_for_required_params(params):
     return users, duration_mins, count
 
 
-def convert_to_ist(time, time_zone):
+def convert_to_ist(dt, time_zone):
     time_zone = pytz.timezone(time_zone)
-    naive_datetime = datetime.datetime(2010, 10, 31, time.hour, time.minute,
-                                       time.second)
+    naive_datetime = dt
     local_datetime = time_zone.localize(naive_datetime, is_dst=None)
-    utc_datetime = local_datetime.astimezone(pytz.timezone("Asia/Calcutta"))
-    return utc_datetime.time()
+    ist_datetime = local_datetime.astimezone(pytz.timezone("Asia/Calcutta"))
+    return ist_datetime
 
 
 def get_date_object(date_string):
@@ -50,13 +46,13 @@ def get_date_string(date_object):
     return rfc3339.rfc3339(date_object)
 
 
-def get_time_in_ist_format(date_string):
+def get_in_ist_format(date_string):
     dt = get_date_object(date_string)
-    utc_datetime = dt.astimezone(pytz.timezone("Asia/Calcutta"))
-    return utc_datetime.time()
+    ist_datetime = dt.astimezone(pytz.timezone("Asia/Calcutta"))
+    return ist_datetime
 
 
-def get_user_preference_list(users):
+def get_user_preference_list(dt, users):
     user_preference_list = []
     for user in users:
         try:
@@ -66,16 +62,18 @@ def get_user_preference_list(users):
 
         preference_time = user_obj.timing_preferences
         time_zone = preference_time.time_zone
-        start_time = preference_time.day_start_time
-        utc_start_time = convert_to_ist(start_time, time_zone)
-        end_time = preference_time.day_end_time
-        utc_end_time = convert_to_ist(end_time, time_zone)
-        user_preference_list.append((utc_start_time, utc_end_time))
+        start_date_time = \
+            datetime.datetime.combine(dt, preference_time.day_start_time)
+        ist_start_date_time = convert_to_ist(start_date_time, time_zone)
+        end_date_time = \
+            datetime.datetime.combine(dt, preference_time.day_end_time)
+        ist_end_date_time = convert_to_ist(end_date_time, time_zone)
+        user_preference_list.append((ist_start_date_time, ist_end_date_time))
     return user_preference_list
 
 
-def common_work_time_interval(users):
-    user_preference_list = get_user_preference_list(users)
+def common_work_time_interval(dt, users):
+    user_preference_list = get_user_preference_list(dt, users)
     user_preference_list.sort()
     start_common_interval = user_preference_list[-1][0]
     user_preference_list.sort(key=lambda x: x[1])
@@ -85,21 +83,22 @@ def common_work_time_interval(users):
     return start_common_interval, end_common_interval
 
 
-def get_blocked_time_interval_list(body, users):
-    blocked_time_interval_list = []
-    date_time_format = get_date_object(body[users[0]]['calendars']['primary']
-                                       ['busy'][0]['start'])
+def get_combine_busy_list(calendar_info, users):
+    combined_busy_list = []
+    given_date = get_date_object(calendar_info[users[0]]['calendars']['primary']
+                                 ['busy'][0]['start']).date()
+
     for user in users:
-        calendar_info = body.get(user, None)
+        cal_info = calendar_info.get(user.strip(), None)
         if not calendar_info:
             raise Exception(f"Not able to fetch the calendar information for "
-                            f"{user}")
-        busy_list = calendar_info['calendars']['primary']['busy']
+                            f"user {user.strip()}")
+        busy_list = cal_info['calendars']['primary']['busy']
         for busy in busy_list:
-            utc_start_time = get_time_in_ist_format(busy['start'])
-            utc_end_time = get_time_in_ist_format(busy['end'])
-            blocked_time_interval_list.append((utc_start_time, utc_end_time))
-    return blocked_time_interval_list, date_time_format
+            ist_start_date_time = get_in_ist_format(busy['start'])
+            ist_end_date_time = get_in_ist_format(busy['end'])
+            combined_busy_list.append((ist_start_date_time, ist_end_date_time))
+    return combined_busy_list, given_date
 
 
 def find_clash(start_time, end_time, busy_intervals):
@@ -120,31 +119,25 @@ def find_clash(start_time, end_time, busy_intervals):
     return found_clash
 
 
-def convert_interval_to_date(free_interval_list, time_format):
+def get_slot_list(free_interval_list):
     slots = []
     for time_interval in free_interval_list:
-        slot = {"start": get_date_string(time_format.replace(
-                            hour=time_interval[0].hour,
-                            minute=time_interval[0].minute
-                            )),
-                "end": get_date_string(time_format.replace(
-                    hour=time_interval[1].hour,
-                    minute=time_interval[1].minute
-                    ))
-                }
+        slot = {
+            "start": get_date_string(time_interval[0]),
+            "end": get_date_string(time_interval[1])
+        }
         slots.append(slot)
     return slots
 
 
-def get_common_free_intervals(body, users, duration_mins, count):
+def get_common_free_intervals(calendar_info, users, duration_mins, count):
+    busy_intervals, time_format = get_combine_busy_list(calendar_info, users)
     start_common_interval, end_common_interval = \
-        common_work_time_interval(users)
-    busy_intervals, time_format = get_blocked_time_interval_list(body, users)
+        common_work_time_interval(time_format, users)
     start_time = start_common_interval
 
-    dt = datetime.datetime.combine(date.today(), start_time) + \
-        timedelta(minutes=duration_mins)
-    end_time = dt.time()
+    dt = start_time + timedelta(minutes=duration_mins)
+    end_time = dt
     free_interval_list = []
     number_of_interval = 0
     while end_time <= end_common_interval:
@@ -154,22 +147,23 @@ def get_common_free_intervals(body, users, duration_mins, count):
             if number_of_interval == count:
                 break
         start_time = end_time
-        dt = datetime.datetime.combine(date.today(), start_time) + \
-            timedelta(minutes=duration_mins)
-        end_time = dt.time()
-    return free_interval_list, time_format
+        dt = start_time + timedelta(minutes=duration_mins)
+        end_time = dt
+    return free_interval_list
 
 
 class FindCommonTimeToMeetAPIView(APIView):
     @staticmethod
     def post(request, *args, **kwargs):
         try:
-            body = request.data
+            calendar_info = request.data
             params = request.GET
             users, duration_mins, count = check_for_required_params(params)
-            free_interval_list, time_format = \
-                get_common_free_intervals(body, users, duration_mins, count)
-            slots = convert_interval_to_date(free_interval_list, time_format)
+            free_interval_list = get_common_free_intervals(calendar_info,
+                                                           users,
+                                                           duration_mins,
+                                                           count)
+            slots = get_slot_list(free_interval_list)
             if len(slots) == 0:
                 return Response({"message": "No common time to meet "
                                             "found for given details"},
